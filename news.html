@@ -1,89 +1,89 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>伊朗局势全自动追踪 - 实时更新</title>
+    <title>Edge 专用贪吃蛇</title>
     <style>
-        :root { --primary: #c0392b; --bg: #fdfdfd; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: #333; line-height: 1.6; margin: 0; }
-        .container { max-width: 900px; margin: 0 auto; padding: 20px; }
-        header { border-bottom: 3px solid var(--primary); padding-bottom: 10px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center; }
-        .live-dot { height: 10px; width: 10px; background-color: var(--primary); border-radius: 50%; display: inline-block; animation: blink 1s infinite; }
-        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
-        .news-card { background: #fff; border: 1px solid #eee; padding: 20px; margin-bottom: 20px; border-radius: 4px; transition: transform 0.2s; }
-        .news-card:hover { border-color: var(--primary); box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
-        .news-title { font-size: 1.25rem; font-weight: bold; margin: 0 0 10px 0; color: #1a1a1a; text-decoration: none; display: block; }
-        .news-meta { font-size: 0.85rem; color: #777; margin-bottom: 15px; }
-        .loading { text-align: center; padding: 50px; color: #999; }
+        body { background: #222; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; color: white; flex-direction: column; }
+        canvas { border: 2px solid #fff; background: #000; box-shadow: 0 0 20px #000; }
+        .stats { margin-top: 10px; font-family: 'Courier New', Courier, monospace; font-size: 20px; }
     </style>
 </head>
 <body>
-
-<div class="container">
-    <header>
-        <div>
-            <h1 style="margin:0;">伊朗冲突实时追踪</h1>
-            <p style="margin:5px 0 0 0; color:#666;">自动聚合全球主流媒体实时电讯</p>
-        </div>
-        <div style="font-weight:bold; color:var(--primary);">
-            <span class="live-dot"></span> 实时监测中
-        </div>
-    </header>
-
-    <div id="news-container">
-        <div class="loading">正在接入卫星通讯，请稍候...</div>
-    </div>
-</div>
+    <div style="margin-bottom:10px;">使用方向键控制 (↑ ↓ ← →)</div>
+    <canvas id="gc" width="400" height="400"></canvas>
+    <div class="stats">SCORE: <span id="score">0</span></div>
 
 <script>
-    // 使用 rss2json 将 RSS 转换为 JSON，避免跨域问题
-    // 这里以美联社的世界新闻 RSS 为例，你也可以替换为其他源
-    const RSS_URL = 'https://www.aljazeera.com/xml/rss/all.xml'; // 半岛电视台中东频道
-    const API_URL = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(RSS_URL)}`;
+window.onload = function() {
+    const canvas = document.getElementById("gc");
+    const ctx = canvas.getContext("2d");
+    const scoreEl = document.getElementById("score");
 
-    async function fetchNews() {
-        try {
-            const response = await fetch(API_URL);
-            const data = await response.json();
-            
-            if (data.status === 'ok') {
-                const container = document.getElementById('news-container');
-                container.innerHTML = ''; // 清空加载状态
+    let px = 10, py = 10; // 蛇头位置
+    let gs = 20, tc = 20; // 网格大小和数量
+    let ax = 15, ay = 15; // 苹果位置
+    let xv = 0, yv = 0;   // 速度
+    let trail = [];
+    let tail = 5;
+    let score = 0;
 
-                data.items.forEach(item => {
-                    // 关键词过滤：只显示包含“Iran”, "Israel", "Tehran" 等关键词的消息
-                    const keywords = ["Iran", "Tehran", "Israel", "Missile", "Strike", "War", "Conflict"];
-                    const isRelevant = keywords.some(k => item.title.includes(k) || item.description.includes(k));
-                    
-                    if (isRelevant) {
-                        const card = `
-                            <div class="news-card">
-                                <a href="${item.link}" target="_blank" class="news-title">${item.title}</a>
-                                <div class="news-meta">发布时间：${item.pubDate} | 来源：${data.feed.title}</div>
-                                <div class="content">${item.description.split('<')[0]}...</div>
-                            </div>
-                        `;
-                        container.innerHTML += card;
-                    }
-                });
-
-                if (container.innerHTML === '') {
-                    container.innerHTML = '<div class="loading">当前暂无最新的针对性战报更新。</div>';
-                }
-            }
-        } catch (error) {
-            console.error('抓取失败:', error);
-            document.getElementById('news-container').innerHTML = '<div class="loading">连接失败，请检查网络或刷新重试。</div>';
+    // 监听键盘
+    document.addEventListener("keydown", function(e) {
+        switch(e.keyCode) {
+            case 37: if(xv!==1) {xv=-1; yv=0;} break; // 左
+            case 38: if(yv!==1) {xv=0; yv=-1;} break; // 上
+            case 39: if(xv!==-1) {xv=1; yv=0;} break; // 右
+            case 40: if(yv!==-1) {xv=0; yv=1;} break; // 下
         }
-    }
+    });
 
-    // 初始抓取
-    fetchNews();
-    // 每 5 分钟自动刷新一次
-    setInterval(fetchNews, 300000);
+    // 游戏主循环
+    setInterval(function() {
+        px += xv;
+        py += yv;
+
+        // 穿墙逻辑
+        if(px < 0) px = tc-1;
+        if(px > tc-1) px = 0;
+        if(py < 0) py = tc-1;
+        if(py > tc-1) py = 0;
+
+        // 背景
+        ctx.fillStyle = "black";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // 画蛇
+        ctx.fillStyle = "lime";
+        for(let i=0; i<trail.length; i++) {
+            ctx.fillRect(trail[i].x*gs, trail[i].y*gs, gs-2, gs-2);
+            // 撞到自己
+            if(trail[i].x === px && trail[i].y === py && (xv!==0 || yv!==0)) {
+                tail = 5;
+                score = 0;
+                scoreEl.innerHTML = score;
+            }
+        }
+        trail.push({x:px, y:py});
+        while(trail.length > tail) {
+            trail.shift();
+        }
+
+        // 吃苹果
+        if(ax === px && ay === py) {
+            tail++;
+            score += 10;
+            scoreEl.innerHTML = score;
+            ax = Math.floor(Math.random()*tc);
+            ay = Math.floor(Math.random()*tc);
+        }
+
+        // 画苹果
+        ctx.fillStyle = "red";
+        ctx.fillRect(ax*gs, ay*gs, gs-2, gs-2);
+
+    }, 1000/15); // 15 FPS
+}
 </script>
-
 </body>
-
 </html>
