@@ -1,89 +1,178 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <title>Edge 专用贪吃蛇</title>
+    <title>点击屏幕开启惊喜</title>
     <style>
-        body { background: #222; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; color: white; flex-direction: column; }
-        canvas { border: 2px solid #fff; background: #000; box-shadow: 0 0 20px #000; }
-        .stats { margin-top: 10px; font-family: 'Courier New', Courier, monospace; font-size: 20px; }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #fff;
+            font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+            cursor: pointer;
+        }
+
+        /* 1. Canvas 背景 */
+        #bg-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        /* 2. 点击出现的单个文字样式 */
+        .click-text {
+            position: absolute;
+            font-size: 5rem;
+            font-weight: bold;
+            color: #d13438;
+            pointer-events: none;
+            text-shadow: 0 0 20px rgba(255, 255, 255, 0.8);
+            animation: textPop 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+            z-index: 100;
+        }
+
+        @keyframes textPop {
+            0% { transform: scale(0) rotate(-20deg); opacity: 0; }
+            50% { transform: scale(1.2) rotate(10deg); opacity: 1; }
+            100% { transform: scale(1) rotate(0deg); opacity: 0.8; }
+        }
+
+        /* 3. 最后出现的精美卡片 */
+        .final-card {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.8);
+            background: rgba(255, 255, 255, 0.5);
+            backdrop-filter: blur(20px);
+            border-radius: 30px;
+            padding: 50px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.7);
+            box-shadow: 0 20px 50px rgba(255, 182, 193, 0.4);
+            z-index: 50;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 1.5s ease;
+        }
+
+        .final-card.show {
+            opacity: 1;
+            visibility: visible;
+            transform: translate(-50%, -50%) scale(1);
+        }
+
+        h2 { color: #d13438; font-size: 3rem; margin-bottom: 20px; }
+        p { color: #6d5b5b; font-size: 1.5rem; line-height: 1.8; }
+
+        /* 引导文字 */
+        .guide {
+            position: fixed;
+            bottom: 50px;
+            width: 100%;
+            text-align: center;
+            color: #d13438;
+            font-size: 1.2rem;
+            z-index: 10;
+            animation: blink 2s infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 1; }
+        }
     </style>
 </head>
 <body>
-    <div style="margin-bottom:10px;">使用方向键控制 (↑ ↓ ← →)</div>
-    <canvas id="gc" width="400" height="400"></canvas>
-    <div class="stats">SCORE: <span id="score">0</span></div>
 
-<script>
-window.onload = function() {
-    const canvas = document.getElementById("gc");
-    const ctx = canvas.getContext("2d");
-    const scoreEl = document.getElementById("score");
+    <canvas id="bg-canvas"></canvas>
+    <div class="guide" id="guide">点一点屏幕，我有话对你说 ❤️</div>
 
-    let px = 10, py = 10; // 蛇头位置
-    let gs = 20, tc = 20; // 网格大小和数量
-    let ax = 15, ay = 15; // 苹果位置
-    let xv = 0, yv = 0;   // 速度
-    let trail = [];
-    let tail = 5;
-    let score = 0;
+    <div class="final-card" id="finalCard">
+        <h2>女神节快乐！</h2>
+        <p>愿你眼里的星星，永远闪烁；<br>愿你心中有爱，脸上有笑。<br>你是我心中永远的女神 ✨</p>
+    </div>
 
-    // 监听键盘
-    document.addEventListener("keydown", function(e) {
-        switch(e.keyCode) {
-            case 37: if(xv!==1) {xv=-1; yv=0;} break; // 左
-            case 38: if(yv!==1) {xv=0; yv=-1;} break; // 上
-            case 39: if(xv!==-1) {xv=1; yv=0;} break; // 右
-            case 40: if(yv!==-1) {xv=0; yv=1;} break; // 下
+    <script>
+        // --- 文字内容设定 ---
+        const message = "亲爱的，祝你三八女神节快乐！".split("");
+        let currentIndex = 0;
+
+        // --- 1. 背景 Canvas 动画 (梦幻光斑) ---
+        const canvas = document.getElementById('bg-canvas');
+        const ctx = canvas.getContext('2d');
+        let spots = [];
+
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
         }
-    });
+        window.addEventListener('resize', resize);
+        resize();
 
-    // 游戏主循环
-    setInterval(function() {
-        px += xv;
-        py += yv;
-
-        // 穿墙逻辑
-        if(px < 0) px = tc-1;
-        if(px > tc-1) px = 0;
-        if(py < 0) py = tc-1;
-        if(py > tc-1) py = 0;
-
-        // 背景
-        ctx.fillStyle = "black";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        // 画蛇
-        ctx.fillStyle = "lime";
-        for(let i=0; i<trail.length; i++) {
-            ctx.fillRect(trail[i].x*gs, trail[i].y*gs, gs-2, gs-2);
-            // 撞到自己
-            if(trail[i].x === px && trail[i].y === py && (xv!==0 || yv!==0)) {
-                tail = 5;
-                score = 0;
-                scoreEl.innerHTML = score;
+        class Spot {
+            constructor() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.radius = Math.random() * 60 + 20;
+                this.color = `rgba(255, ${180 + Math.random() * 75}, ${180 + Math.random() * 75}, ${Math.random() * 0.2 + 0.1})`;
+                this.vx = (Math.random() - 0.5) * 0.5;
+                this.vy = (Math.random() - 0.5) * 0.5;
+            }
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+            }
+            update() {
+                this.x += this.vx; this.y += this.vy;
+                if (this.x < 0 || this.x > canvas.width) this.vx *= -1;
+                if (this.y < 0 || this.y > canvas.height) this.vy *= -1;
             }
         }
-        trail.push({x:px, y:py});
-        while(trail.length > tail) {
-            trail.shift();
+
+        for (let i = 0; i < 30; i++) spots.push(new Spot());
+
+        function animate() {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            spots.forEach(s => { s.update(); s.draw(); });
+            requestAnimationFrame(animate);
         }
+        animate();
 
-        // 吃苹果
-        if(ax === px && ay === py) {
-            tail++;
-            score += 10;
-            scoreEl.innerHTML = score;
-            ax = Math.floor(Math.random()*tc);
-            ay = Math.floor(Math.random()*tc);
-        }
+        // --- 2. 点击交互逻辑 ---
+        document.addEventListener('mousedown', (e) => {
+            if (currentIndex < message.length) {
+                // 隐藏引导语
+                document.getElementById('guide').style.display = 'none';
 
-        // 画苹果
-        ctx.fillStyle = "red";
-        ctx.fillRect(ax*gs, ay*gs, gs-2, gs-2);
+                // 创建并显示文字
+                const span = document.createElement('div');
+                span.className = 'click-text';
+                span.textContent = message[currentIndex];
+                span.style.left = (e.clientX - 40) + 'px';
+                span.style.top = (e.clientY - 40) + 'px';
+                document.body.appendChild(span);
 
-    }, 1000/15); // 15 FPS
-}
-</script>
+                currentIndex++;
+
+                // 文字播完后弹出卡片
+                if (currentIndex === message.length) {
+                    setTimeout(() => {
+                        document.getElementById('finalCard').classList.add('show');
+                    }, 1000);
+                }
+
+                // 清理掉落文字
+                setTimeout(() => span.remove(), 800);
+            }
+        });
+    </script>
 </body>
 </html>
